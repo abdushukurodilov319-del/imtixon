@@ -8,8 +8,8 @@ import 'attendance.dart';
 
 // Ma'lumotlar ombori - LocalStorage orqali yuklanadi
 final teachersProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
-  final defaultList = [
-    {
+  final List<Map<String, dynamic>> defaultList = [
+    <String, dynamic>{
       'id': '1',
       'name': 'Ali Valiyev',
       'subject': 'Matematika',
@@ -17,7 +17,7 @@ final teachersProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
       'password': '123',
       'icon': '👨‍🏫'
     },
-    {
+    <String, dynamic>{
       'id': '2',
       'name': 'Olim Hoshimov',
       'subject': 'Fizika',
@@ -30,17 +30,17 @@ final teachersProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
 });
 
 final groupsProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
-  final defaultList = [
-    {'id': '1', 'name': 'Flutter Boot-1', 'teacherId': '1'},
-    {'id': '2', 'name': 'Python Pro-2', 'teacherId': '2'},
-    {'id': '3', 'name': 'Frontend Web-3', 'teacherId': '1'},
+  final List<Map<String, dynamic>> defaultList = [
+    <String, dynamic>{'id': '1', 'name': 'Flutter Boot-1', 'teacherId': '1'},
+    <String, dynamic>{'id': '2', 'name': 'Python Pro-2', 'teacherId': '2'},
+    <String, dynamic>{'id': '3', 'name': 'Frontend Web-3', 'teacherId': '1'},
   ];
   return AppStorage.loadList('groups', defaultList);
 });
 
 final studentsProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
-  final defaultList = [
-    {
+  final List<Map<String, dynamic>> defaultList = [
+    <String, dynamic>{
       'id': '1',
       'name': 'Javohir Eshmatov',
       'group': 'Flutter Boot-1',
@@ -49,7 +49,7 @@ final studentsProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
       'email': 'student@coin.uz',
       'password': '123'
     },
-    {
+    <String, dynamic>{
       'id': '2',
       'name': 'Madina Toshmatova',
       'group': 'Python Pro-2',
@@ -63,8 +63,8 @@ final studentsProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
 });
 
 final transactionsProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
-  final defaultList = [
-    {
+  final List<Map<String, dynamic>> defaultList = [
+    <String, dynamic>{
       'studentId': '1',
       'title': 'Darsdagi faollik uchun',
       'amount': 10,
@@ -72,7 +72,7 @@ final transactionsProvider = StateProvider<List<Map<String, dynamic>>>((ref) {
       'type': 'plus',
       'awardedBy': '1'
     },
-    {
+    <String, dynamic>{
       'studentId': '2',
       'title': 'Uy vazifasi uchun',
       'amount': 15,
@@ -187,8 +187,11 @@ class AdminStatsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final teachersCount = ref.watch(teachersProvider).length;
-    final studentsCount = ref.watch(studentsProvider).length;
+    final students = ref.watch(studentsProvider);
+    final studentsCount = students.length;
     final groupsCount = ref.watch(groupsProvider).length;
+    
+    final totalCoins = students.fold<int>(0, (sum, s) => sum + (int.tryParse(s['coins']?.toString() ?? '0') ?? 0));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -223,7 +226,7 @@ class AdminStatsView extends ConsumerWidget {
           ),
           StatCard(
             title: 'Jami Coinlar', 
-            value: '1,250', 
+            value: '$totalCoins', 
             icon: Icons.monetization_on, 
             color: Colors.amber,
             onTap: () {},
@@ -387,7 +390,7 @@ class GenericManagementView extends ConsumerWidget {
 
                 if (title == 'O\'qituvchilar') {
                   final list = ref.read(teachersProvider);
-                  final newItem = {
+                  final newItem = <String, dynamic>{
                     'id': item?['id'] ?? DateTime.now().toString(), 
                     'name': name, 
                     'subject': extra,
@@ -399,7 +402,7 @@ class GenericManagementView extends ConsumerWidget {
                 } 
                 else if (title == 'Guruhlar') {
                   final list = ref.read(groupsProvider);
-                  final newItem = {
+                  final newItem = <String, dynamic>{
                     'id': item?['id'] ?? DateTime.now().toString(), 
                     'name': name,
                     'teacherId': selectedTeacherId
@@ -412,12 +415,12 @@ class GenericManagementView extends ConsumerWidget {
                     final groups = ref.read(groupsProvider);
                     final groupExists = groups.any((g) => g['name'].toString().toLowerCase() == extra.toLowerCase());
                     if (!groupExists) {
-                      ref.read(groupsProvider.notifier).state = [...groups, {'id': DateTime.now().toString(), 'name': extra}];
+                      ref.read(groupsProvider.notifier).state = [...groups, <String, dynamic>{'id': DateTime.now().toString(), 'name': extra, 'teacherId': null}];
                     }
                   }
 
                   final list = ref.read(studentsProvider);
-                  final newItem = {
+                  final newItem = <String, dynamic>{
                     'id': item?['id'] ?? DateTime.now().toString(), 
                     'name': name, 
                     'group': extra, 
@@ -491,7 +494,7 @@ class GenericManagementView extends ConsumerWidget {
                         Builder(
                           builder: (context) {
                             final teachers = ref.read(teachersProvider);
-                            final teacher = teachers.firstWhere((t) => t['id'] == item['teacherId'], orElse: () => {'name': 'Noma\'lum'});
+                            final teacher = teachers.firstWhere((t) => t['id'].toString() == item['teacherId'].toString(), orElse: () => <String, dynamic>{'name': 'Noma\'lum'});
                             return Text('O\'qituvchi: ${teacher['name']}',
                               style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w500));
                           }
@@ -573,7 +576,7 @@ class AdminReportsView extends ConsumerWidget {
                     itemCount: teacherTxs.length,
                     itemBuilder: (context, txIndex) {
                       final tx = teacherTxs[txIndex];
-                      final student = students.firstWhere((s) => s['id'] == tx['studentId'], orElse: () => {'name': 'Noma\'lum'});
+                      final student = students.firstWhere((s) => s['id'] == tx['studentId'], orElse: () => <String, dynamic>{'name': 'Noma\'lum'});
                       return ListTile(
                         dense: true,
                         title: Text('${student['name']} - ${tx['title']}'),

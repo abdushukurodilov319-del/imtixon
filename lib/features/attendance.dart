@@ -23,11 +23,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         : allStudents.where((s) => s['group'] == widget.groupId).toList();
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text('${widget.groupId} - Davomat'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        iconTheme: const IconThemeData(color: Color(0xFF6366F1)),
+        titleTextStyle: const TextStyle(color: Color(0xFF1E293B), fontSize: 20, fontWeight: FontWeight.bold),
         actions: [
           if (widget.canEdit)
             IconButton(
@@ -117,7 +119,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                               const SizedBox(width: 8),
                               Switch(
                                 value: isPresent,
-                                activeColor: Colors.green,
+                                activeTrackColor: Colors.green.shade400,
+                                activeColor: Colors.white,
                                 onChanged: (val) => setState(() => _attendanceStatus[studentId] = val),
                               ),
                             ],

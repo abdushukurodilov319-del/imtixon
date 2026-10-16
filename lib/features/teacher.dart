@@ -6,27 +6,39 @@ import '../core/persistence.dart';
 import 'admin.dart'; // providers ni ishlatish uchun
 import 'attendance.dart';
 
-class TeacherDashboardScreen extends ConsumerStatefulWidget {
+final teacherSelectedIndexProvider = StateProvider<int>((ref) => 0);
+
+class TeacherDashboardScreen extends ConsumerWidget {
   const TeacherDashboardScreen({super.key});
 
   @override
-  ConsumerState<TeacherDashboardScreen> createState() => _TeacherDashboardScreenState();
-}
-
-class _TeacherDashboardScreenState extends ConsumerState<TeacherDashboardScreen> with SingleTickerProviderStateMixin {
-  int _selectedIndex = 6; // "Baholash" is the 7th item (index 6)
-  late AnimationController _fadeController;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))..forward();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(teachersProvider, (prev, next) => AppStorage.saveList('teachers', next));
+    ref.listen(groupsProvider, (prev, next) => AppStorage.saveList('groups', next));
     ref.listen(studentsProvider, (prev, next) => AppStorage.saveList('students', next));
     ref.listen(transactionsProvider, (prev, next) => AppStorage.saveList('transactions', next));
+
+    final selectedIndex = ref.watch(teacherSelectedIndexProvider);
+
+    final List<Widget> pages = [
+      const TeacherStatsView(),
+      const TeacherNewsView(),
+      const TeacherProfileView(),
+      const TeacherGroupsView(),
+      const TeacherRankingView(),
+      const TeacherAuctionView(),
+      const TeacherAssessmentView(),
+      const Center(child: Text('Baholash Nizomi')),
+    ];
+
+    final userEmail = ref.watch(loggedInUserEmailProvider);
+    final teachers = ref.watch(teachersProvider);
+    
+    // Email bo'yicha topolmasa, birinchi o'qituvchini oladi (Demo uchun)
+    final currentTeacher = teachers.firstWhere(
+      (t) => t['email'] == userEmail,
+      orElse: () => teachers.isNotEmpty ? teachers.first : <String, dynamic>{'id': '1', 'name': 'Ustoz', 'icon': '👨‍🏫'},
+    );
 
     final bool isMobile = MediaQuery.of(context).size.width < 1000;
 
@@ -65,14 +77,14 @@ class _TeacherDashboardScreenState extends ConsumerState<TeacherDashboardScreen>
           Expanded(
             child: ListView(
               children: [
-                _buildNavItem(0, Icons.dashboard_outlined, 'Dashboard'),
-                _buildNavItem(1, Icons.newspaper_outlined, 'Yangiliklar'),
-                _buildNavItem(2, Icons.person_outline, 'Profil'),
-                _buildNavItem(3, Icons.groups_outlined, 'Guruhlarim'),
-                _buildNavItem(4, Icons.bar_chart_outlined, 'Reyting'),
-                _buildNavItem(5, Icons.gavel_outlined, 'Auksion'),
-                _buildNavItem(6, Icons.menu_book_outlined, 'Baholash'),
-                _buildNavItem(7, Icons.rule_outlined, 'Baholash Nizomi'),
+                _buildNavItem(context, ref, 0, Icons.dashboard_outlined, 'Dashboard'),
+                _buildNavItem(context, ref, 1, Icons.newspaper_outlined, 'Yangiliklar'),
+                _buildNavItem(context, ref, 2, Icons.person_outline, 'Profil'),
+                _buildNavItem(context, ref, 3, Icons.groups_outlined, 'Guruhlarim'),
+                _buildNavItem(context, ref, 4, Icons.bar_chart_outlined, 'Reyting'),
+                _buildNavItem(context, ref, 5, Icons.gavel_outlined, 'Auksion'),
+                _buildNavItem(context, ref, 6, Icons.menu_book_outlined, 'Baholash'),
+                _buildNavItem(context, ref, 7, Icons.rule_outlined, 'Baholash Nizomi'),
               ],
             ),
           ),
@@ -88,7 +100,7 @@ class _TeacherDashboardScreenState extends ConsumerState<TeacherDashboardScreen>
                     CircleAvatar(
                       backgroundColor: const Color(0xFFE0E7FF),
                       child: Text(
-                        (currentTeacher['name'] ?? 'U')[0],
+                        currentTeacher['icon'] ?? (currentTeacher['name'] ?? 'U')[0],
                         style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -147,9 +159,9 @@ class _TeacherDashboardScreenState extends ConsumerState<TeacherDashboardScreen>
         children: [
           if (!isMobile) sidebar,
           Expanded(
-            child: FadeTransition(
-              opacity: _fadeController,
-              child: pages[_selectedIndex],
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: pages[selectedIndex],
             ),
           ),
         ],
@@ -157,17 +169,14 @@ class _TeacherDashboardScreenState extends ConsumerState<TeacherDashboardScreen>
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _selectedIndex == index;
+  Widget _buildNavItem(BuildContext context, WidgetRef ref, int index, IconData icon, String label) {
+    final selectedIndex = ref.watch(teacherSelectedIndexProvider);
+    final isSelected = selectedIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: InkWell(
         onTap: () {
-          setState(() {
-            _selectedIndex = index;
-            _fadeController.reset();
-            _fadeController.forward();
-          });
+          ref.read(teacherSelectedIndexProvider.notifier).state = index;
           if (MediaQuery.of(context).size.width < 1000) {
             Navigator.pop(context); // Close drawer on mobile
           }
@@ -201,7 +210,7 @@ class _TeacherDashboardScreenState extends ConsumerState<TeacherDashboardScreen>
     );
   }
 }
-}
+
 
 class TeacherGroupsView extends ConsumerWidget {
   const TeacherGroupsView({super.key});
@@ -217,10 +226,10 @@ class TeacherGroupsView extends ConsumerWidget {
       orElse: () => teachers.isNotEmpty ? teachers.first : <String, dynamic>{},
     );
 
-    final groups = allGroups.where((g) {
+    final myGroups = allGroups.where((g) {
       final tId = g['teacherId']?.toString();
-      final currentId = currentTeacher['id']?.toString();
-      return tId != null && tId == currentId;
+      final cId = currentTeacher['id']?.toString();
+      return cId != null && tId == cId;
     }).toList();
 
     return Padding(
@@ -234,12 +243,12 @@ class TeacherGroupsView extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           Expanded(
-            child: groups.isEmpty
+            child: myGroups.isEmpty
                 ? const Center(child: Text('Sizga biriktirilgan guruhlar topilmadi'))
                 : ListView.builder(
-                    itemCount: groups.length,
+                    itemCount: myGroups.length,
                     itemBuilder: (context, index) {
-                      final group = groups[index];
+                      final group = myGroups[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         color: Colors.white,
@@ -308,9 +317,11 @@ class _TeacherAssessmentViewState extends ConsumerState<TeacherAssessmentView> {
       orElse: () => teachers.isNotEmpty ? teachers.first : <String, dynamic>{},
     );
 
-    final myGroups = allGroups
-        .where((g) => g['teacherId']?.toString() == currentTeacher['id']?.toString())
-        .toList();
+    final myGroups = allGroups.where((g) {
+      final tId = g['teacherId']?.toString();
+      final cId = currentTeacher['id']?.toString();
+      return cId != null && tId == cId;
+    }).toList();
 
     if (selectedGroup == null && myGroups.isNotEmpty) {
       selectedGroup = myGroups.first['name'];
@@ -379,7 +390,7 @@ class _TeacherAssessmentViewState extends ConsumerState<TeacherAssessmentView> {
                       const Text('GURUH', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        initialValue: selectedGroup,
+                        value: selectedGroup,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -506,8 +517,8 @@ class _TeacherAssessmentViewState extends ConsumerState<TeacherAssessmentView> {
                       ),
                       child: Row(
                         children: [
-                          const SizedBox(width: 40, child: Text('O\'quvchi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                          const Expanded(flex: 3, child: SizedBox()),
+                          const SizedBox(width: 48),
+                          const Expanded(flex: 3, child: Text('O\'quvchi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                           ...categories.map((cat) => Expanded(
                             child: Text(
                               cat['name'],
@@ -555,7 +566,7 @@ class _TeacherAssessmentViewState extends ConsumerState<TeacherAssessmentView> {
                               ...categories.map((cat) => Expanded(
                                 child: Center(
                                   child: InkWell(
-                                    onTap: () => _applyCoin(ref, student, cat['value'], cat['name']),
+                                    onTap: () => _applyCoin(ref, student, (cat['value'] as int), cat['name'] as String),
                                     child: Container(
                                       width: 40,
                                       height: 30,
@@ -629,6 +640,579 @@ class _TeacherAssessmentViewState extends ConsumerState<TeacherAssessmentView> {
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Barcha o\'quvchilarga "$reason" uchun $amount coin berildi')),
+    );
+  }
+
+  void _applyCoin(WidgetRef ref, Map<String, dynamic> student, int amount, String reason) {
+    _applyCoinToAll(ref, [student], amount, reason);
+  }
+}
+
+class TeacherStatsView extends ConsumerWidget {
+  const TeacherStatsView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final allStudents = ref.watch(studentsProvider);
+    final allGroups = ref.watch(groupsProvider);
+    final teachers = ref.watch(teachersProvider);
+    final userEmail = ref.watch(loggedInUserEmailProvider);
+
+    final currentTeacher = teachers.firstWhere(
+      (t) => t['email'] == userEmail,
+      orElse: () => teachers.isNotEmpty ? teachers.first : <String, dynamic>{'id': '1'},
+    );
+
+    final myGroups = allGroups.where((g) {
+      final tId = g['teacherId']?.toString();
+      final cId = currentTeacher['id']?.toString();
+      return cId != null && tId == cId;
+    }).toList();
+
+    final myGroupNames = myGroups.map((g) => g['name'].toString()).toSet();
+    final myStudents = allStudents.where((s) => myGroupNames.contains(s['group'].toString())).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'O\'qituvchi Dashboard',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              _StatCard(
+                title: 'Mening Guruhlarim',
+                value: '${myGroups.length}',
+                icon: Icons.groups,
+                color: Colors.blue,
+                onTap: () => ref.read(teacherSelectedIndexProvider.notifier).state = 3,
+              ),
+              const SizedBox(width: 16),
+              _StatCard(
+                title: 'Mening O\'quvchilarim',
+                value: '${myStudents.length}',
+                icon: Icons.school,
+                color: Colors.green,
+                onTap: () => ref.read(teacherSelectedIndexProvider.notifier).state = 6,
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          const Text(
+            'O\'quvchilar ro\'yxati',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: myStudents.isEmpty
+                ? const Center(child: Text('Sizda hali o\'quvchilar yo\'q'))
+                : ListView.builder(
+                    itemCount: myStudents.length,
+                    itemBuilder: (context, index) {
+                      final s = myStudents[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.indigo.shade50,
+                            child: Text(s['icon'] ?? '👤'),
+                          ),
+                          title: Text(s['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(s['group'] ?? ''),
+                          trailing: Text('${s['coins']} 🪙', style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title, value;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+  const _StatCard({required this.title, required this.value, required this.icon, required this.color, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 10)],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: color, size: 30),
+              const SizedBox(height: 12),
+              Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+              const SizedBox(height: 4),
+              Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class TeacherNewsView extends StatelessWidget {
+  const TeacherNewsView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Yangiliklar', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView.builder(
+              itemCount: 3,
+              itemBuilder: (c, i) => Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  children: [
+                    Container(height: 150, color: Colors.grey[200], child: const Center(child: Icon(Icons.image, size: 50))),
+                    ListTile(
+                      title: Text('Codial News #${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Bugun auksion kuni! Barcha talabalarni kutib qolamiz.'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class TeacherProfileView extends ConsumerWidget {
+  const TeacherProfileView({super.key});
+
+  void _showEditProfileDialog(BuildContext context, WidgetRef ref, Map<String, dynamic> teacher) {
+    final nameController = TextEditingController(text: teacher['name'] ?? '');
+    final phoneController = TextEditingController(text: teacher['phone'] ?? '+998 90 123 45 67');
+    String selectedIcon = teacher['icon'] ?? '👨‍🏫';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Profilni tahrirlash'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Icon tanlang:'),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: ['👨‍🏫', '👩‍🏫', '🎓', '👨‍💻', '👩‍💻', '🌟', '🔥'].map((e) => GestureDetector(
+                    onTap: () => setDialogState(() => selectedIcon = e),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: selectedIcon == e ? Colors.indigo.withAlpha(25) : Colors.transparent,
+                        border: Border.all(color: selectedIcon == e ? Colors.indigo : Colors.grey.shade300, width: 2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(e, style: const TextStyle(fontSize: 24)),
+                    ),
+                  )).toList(),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Ism sharif', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(labelText: 'Telefon raqam', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Bekor qilish')),
+            ElevatedButton(
+              onPressed: () {
+                final teachers = ref.read(teachersProvider);
+                ref.read(teachersProvider.notifier).state = teachers.map((t) {
+                  if (t['id'] == teacher['id']) {
+                    return {
+                      ...t,
+                      'name': nameController.text.trim(),
+                      'phone': phoneController.text.trim(),
+                      'icon': selectedIcon,
+                    };
+                  }
+                  return t;
+                }).toList();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil yangilandi!')));
+              },
+              child: const Text('Saqlash'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userEmail = ref.watch(loggedInUserEmailProvider);
+    final teachers = ref.watch(teachersProvider);
+    final currentTeacher = teachers.firstWhere(
+      (t) => t['email'] == userEmail,
+      orElse: () => teachers.isNotEmpty ? teachers.first : <String, dynamic>{'name': 'Ustoz'},
+    );
+
+    return SingleChildScrollView(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                children: [
+                  CircleAvatar(radius: 60, backgroundColor: const Color(0xFFEEF2FF), child: Text(currentTeacher['icon'] ?? '👨‍🏫', style: const TextStyle(fontSize: 50))),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: CircleAvatar(
+                      backgroundColor: const Color(0xFF6366F1),
+                      radius: 18,
+                      child: IconButton(
+                        icon: const Icon(Icons.edit, size: 18, color: Colors.white),
+                        onPressed: () => _showEditProfileDialog(context, ref, currentTeacher),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text(currentTeacher['name'] ?? '', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              Text(userEmail ?? '', style: const TextStyle(color: Colors.grey, fontSize: 16)),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(5), blurRadius: 10)],
+                ),
+                child: Column(
+                  children: [
+                    _ProfileInfoRow(icon: Icons.phone, label: 'Telefon', value: currentTeacher['phone'] ?? '+998 90 123 45 67'),
+                    const Divider(height: 32),
+                    _ProfileInfoRow(icon: Icons.work, label: 'Mutaxassislik', value: currentTeacher['subject'] ?? 'Senior Mentor'),
+                    const Divider(height: 32),
+                    _ProfileInfoRow(icon: Icons.badge, label: 'ID', value: '#${currentTeacher['id']?.toString().substring(0, 5)}'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: () => _showEditProfileDialog(context, ref, currentTeacher),
+                icon: const Icon(Icons.edit_note),
+                label: const Text('Profilni tahrirlash'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () => _showChangePasswordDialog(context),
+                icon: const Icon(Icons.lock_outline),
+                label: const Text('Parolni o\'zgartirish'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  foregroundColor: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context) {
+    final oldPassController = TextEditingController();
+    final newPassController = TextEditingController();
+    final confirmPassController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Parolni o\'zgartirish'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: oldPassController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Eski parol', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: newPassController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Yangi parol', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: confirmPassController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Yangi parolni tasdiqlang', border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Bekor qilish')),
+          ElevatedButton(
+            onPressed: () {
+              if (newPassController.text != confirmPassController.text) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Parollar mos kelmadi!')));
+                return;
+              }
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Parol muvaffaqiyatli o\'zgartirildi!')));
+            },
+            child: const Text('O\'zgartirish'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label, value;
+  const _ProfileInfoRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, color: const Color(0xFF6366F1), size: 20),
+        ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class TeacherRankingView extends ConsumerWidget {
+  const TeacherRankingView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final students = ref.watch(studentsProvider);
+    final sortedStudents = [...students]..sort((a, b) => (b['coins'] as int).compareTo(a['coins'] as int));
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Reyting', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView.builder(
+              itemCount: sortedStudents.length,
+              itemBuilder: (c, i) {
+                final s = sortedStudents[i];
+                return ListTile(
+                  leading: Text('#${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(s['name'] ?? ''),
+                  subtitle: Text(s['group'] ?? ''),
+                  trailing: Text('${s['coins']} 🪙', style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class TeacherAuctionView extends ConsumerWidget {
+  const TeacherAuctionView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final List<Map<String, dynamic>> auctionItems = [
+      {'name': 'Codial Hoodie', 'price': 1500, 'icon': Icons.checkroom, 'color': Colors.deepPurple, 'type': 'Kiyim'},
+      {'name': 'Mechanical Keyboard', 'price': 2000, 'icon': Icons.keyboard, 'color': Colors.blue, 'type': 'Gadjet'},
+      {'name': 'Mentorship (1 soat)', 'price': 3000, 'icon': Icons.psychology, 'color': Colors.amber, 'type': 'Ta\'lim'},
+      {'name': 'Codial Backpack', 'price': 1000, 'icon': Icons.backpack, 'color': Colors.green, 'type': 'Aksesuar'},
+      {'name': 'Wireless Earbuds', 'price': 1800, 'icon': Icons.headset, 'color': Colors.red, 'type': 'Gadjet'},
+      {'name': 'VIP Kofe tanaffusi', 'price': 500, 'icon': Icons.coffee, 'color': Colors.brown, 'type': 'Tajriba'},
+      {'name': 'Sticker Pack', 'price': 100, 'icon': Icons.auto_awesome, 'color': Colors.pink, 'type': 'Boshqa'},
+      {'name': 'Dasturlash kitobi', 'price': 700, 'icon': Icons.menu_book, 'color': Colors.indigo, 'type': 'Kitob'},
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Auksion', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          Expanded(
+            child: GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.8,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: auctionItems.length,
+              itemBuilder: (c, i) {
+                final item = auctionItems[i];
+                return Card(
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          color: (item['color'] as Color).withAlpha(20),
+                          child: Icon(item['icon'] as IconData, size: 50, color: item['color'] as Color),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          children: [
+                            Text(
+                              item['name'] as String,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Boshlang\'ich: ${item['price']} 🪙',
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                            ),
+                            const SizedBox(height: 12),
+                              ElevatedButton(
+                              onPressed: () {
+                                _startAuction(context, ref, item);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: item['color'] as Color,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(double.infinity, 36),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: const Text('Boshlash'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startAuction(BuildContext context, WidgetRef ref, Map<String, dynamic> item) {
+    int selectedDuration = 10;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('${item['name']} auksionini boshlash'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Boshlang\'ich narx: ${item['price']} 🪙'),
+              const SizedBox(height: 16),
+              const Text('Auksion vaqti (daqiqa):'),
+              const SizedBox(height: 8),
+              Row(
+                children: [5, 10, 15, 20].map((m) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text('$m m'),
+                    selected: selectedDuration == m,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setDialogState(() => selectedDuration = m);
+                      }
+                    },
+                  ),
+                )).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Bekor qilish')),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${item['name']} uchun $selectedDuration daqiqalik jonli auksion boshlandi!'),
+                    backgroundColor: item['color'] as Color,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: item['color'] as Color),
+              child: const Text('Jonli efirni boshlash'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
